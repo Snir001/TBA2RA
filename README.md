@@ -7,7 +7,7 @@ to change it back to jupyter notbook, install:
 
 
 to change it back to jupyter notbook use:
-jupytext --to ipynb TBA2RA.py
+* jupytext --to ipynb TBA2RA.py
 
 back to .py for uploading to github
-jupytext --to py TBA2RA.ipynb
+* jupytext --to py TBA2RA.ipynb
