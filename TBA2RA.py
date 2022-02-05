@@ -143,6 +143,12 @@ class Clk_region(dict):
     # def __str__(self):
     #     return str(self)
 
+    def __str__(self):
+        string=""
+        for clk, value in self.items():
+            string= string+str(clk)+":"+str(value)+","
+        return string
+
     def satisfy(self, conditions: list):
         """
         gets self and list of conditions (from the edges)
@@ -374,7 +380,11 @@ class RA:
                 if clk_status.integral[0] != '=':
                     new_clock_region[clk_name] = clk_status
 
-            return [new_clock_region] + self.calculate_time_successor(new_clock_region)
+            return_regions = [new_clock_region] + self.calculate_time_successor(new_clock_region)
+            for time_reg in return_regions:
+                if return_regions.count(time_reg) > 1:
+                    return_regions.remove(time_reg)
+            return return_regions
 
         # case no one equal and not all above max
         # in this case' the time succesor incuding the clk_region itself, his time succesor, and his time succesor
@@ -401,7 +411,14 @@ class RA:
                 new_clock_region[clk_name] = clk_status
 
             # in this case' the time succesor incuding the clk_region itself, his time succesor, and his time succesor
-            return [clk_region, new_clock_region] + self.calculate_time_successor(new_clock_region)
+
+
+
+            return_regions= [clk_region, new_clock_region] + self.calculate_time_successor(new_clock_region)
+            for time_reg in return_regions:
+                if return_regions.count(time_reg) > 1:
+                    return_regions.remove(time_reg)
+            return return_regions
 
     '''
     input: tba, extended state,
