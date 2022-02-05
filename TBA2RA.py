@@ -172,10 +172,14 @@ class Clk_region(dict):
                 else:
                     print("Oh, Fatal Error")
 
-                sign = re.search("[<>=]{1,2}", 'x<=2').group(0)
+                sign = re.search("[<>=]{1,2}", single_condition).group(0)
+                if sign == "=":
+                    sign= "=="
+
                 eval_exp = str(z) + sign + clock_cond_val
                 if not eval(eval_exp):
                     return False
+
         return True
 
     def init_clocks(self: dict, clks: list):
@@ -469,6 +473,7 @@ class RA:
         # Mark the source node as visited and enqueue it
         queue.append(start)
         visited.append(start)
+        self.ex_states.append(start)
 
         while queue:
 
@@ -568,4 +573,5 @@ def read_TBA_from_text(text: str) -> TBA:
 # read TBA from file and print it:
 tba = read_TBA_from_text(automaton1)
 ra = RA(tba)
-print(ra)
+print("hi")
+# print(ra)
