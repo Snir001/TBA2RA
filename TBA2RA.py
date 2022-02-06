@@ -317,7 +317,7 @@ class RA:
             }
 
         succ = self.calculate_time_successor(test)
-        
+
         self.graph = self.BFS(self.ex_start[0])
         print("done")
 
@@ -432,6 +432,7 @@ class RA:
         # case no one equal and not all above max
         # in this case' the time succesor incuding the clk_region itself, his time succesor, and his time succesor
         else:
+            maximal_fract_clocks=[]
             for clk_name, clk_status in clk_region.items():
                 if clk_status.integral[0] != '>':  #cc
                     # not bigger than max value
@@ -444,14 +445,14 @@ class RA:
                             have_maximal_fract = False
                             break
                     if have_maximal_fract:
-                        # if clk_status is c-1<x<c, make it x=c
-                        new_clock_region[clk_name] = Clk_status(['=', clk_status.integral[2]],
-                                                                clk_status.bigger_fract, clk_status.smaller_fract,
-                                                                clk_status.equal_fract)
-                        continue
+                        maximal_fract_clocks.append(clk_name)
 
-                # if we are here, than integral is not '<', or have_maximal_fract is false
-                new_clock_region[clk_name] = clk_status
+            # here we need to adjust the fract part!!
+            # for each clock with maximal fract, make it equal to nnext integer and 
+            # and change his fract to be smallest, and other fratcs smaller to incllude him:
+            new_clock_region= clk_region.init_clocks(maximal_fract_clocks)
+            for clk_name in maximal_fract_clocks:
+                new_clock_region[clk_name].integral=['=',clk_region[clk_name].integral[2]]
 
             # in this case' the time succesor incuding the clk_region itself, his time succesor, and his time succesor
 
