@@ -14,11 +14,20 @@
 # the set $\lambda \subseteq C$ are the clock to be reset with this transition, and $\lambda$ is a clock constraint over $C$ 
 # 
 # Example: $<s_0, s_1, a, (x,y) , (x<10,z>2) >$ - transition from $s_0$ to $s_1$ on char $a$ if clock x under 10 and clock z above 2, and clock x and y are reset on this transition
+
+
+from copy import copy, deepcopy
 import PySimpleAutomata
 from PySimpleAutomata import automata_IO, NFA
 import visual_automata
 from visual_automata.fa.dfa import VisualDFA
 import graphviz
+
+g_id=-1
+def get_id():
+    global g_id
+    g_id=g_id+1 
+    return g_id
 
 
 class Edge:
@@ -29,6 +38,7 @@ class Edge:
     conditions = []
 
     def __init__(self, source, target, input, clk_init, conditions):
+        self.id=get_id()
         self.source = source
         self.target = target
         self.input = input
@@ -64,6 +74,7 @@ class TBA:
     '''
 
     def __init__(self, alphabet, states, start, clks, edges, accepting):
+        self.id=get_id()
         self.alphabet = alphabet
         self.states = states
         self.start = start
@@ -110,6 +121,7 @@ class Clk_status:
     smaller_fract = []
 
     def __init__(self, integral, bigger_fract, equal_fract, smaller_fract):
+        self.id=get_id()
         self.integral = integral
         self.bigger_fract = bigger_fract
         self.equal_fract = equal_fract
@@ -147,6 +159,11 @@ contains list o clocks statuses
 class Clk_region(dict):
     # def __str__(self):
     #     return str(self)
+
+    def __init__(self, *args, **kwargs ):
+        self.id=get_id()
+        dict.__init__(self, *args, **kwargs )
+
 
     def __str__(self):
         string=""
@@ -187,35 +204,39 @@ class Clk_region(dict):
 
         return True
 
-    def init_clocks(self: dict, clks: list):
+    def init_clocks(self, clks: list):
         """
         gets list of clocks and initiate them:
         1) make them equal to zero
         2) change bigger, equal, smaller fract to be right
         """
-        for clk in self:
-            if clk in clks:
-                self[clk].integral = ['=', 0]
-                self[clk].smaller_fract = []
-                self[clk].bigger_fract = []
-                self[clk].equal_fract = []
+        # make copy of self:
+        new_clk_region= deepcopy(self)
 
-                for other_clk in self:
+
+        for clk in new_clk_region:
+            if clk in clks:
+                new_clk_region[clk].integral = ['=', 0]
+                new_clk_region[clk].smaller_fract = []
+                new_clk_region[clk].bigger_fract = []
+                new_clk_region[clk].equal_fract = []
+
+                for other_clk in new_clk_region:
                     if clk == other_clk:  # ignores himself
                         continue
                     elif other_clk in clks:  # if the other clock also initiated
-                        self[clk].equal_fract.append(other_clk)
+                        new_clk_region[clk].equal_fract.append(other_clk)
                     else:  # if the other clock was not initiated
-                        self[clk].bigger_fract.append(other_clk)  # other clock is bigger than this clock
+                        new_clk_region[clk].bigger_fract.append(other_clk)  # other clock is bigger than this clock
                         # TODO: check about clock that was initiated in the past
-                        if clk in self[other_clk].bigger_fract:  # if this clock listed as bigger than other
-                            self[other_clk].bigger_fract.remove(clk)  # remove initiated clock from bigger list
-                        elif clk in self[other_clk].equal_fract:  # if this clock listed as equal to other
-                            self[other_clk].equal_fract.remove(clk)  # remove initiated clock from equal list
+                        if clk in new_clk_region[other_clk].bigger_fract:  # if this clock listed as bigger than other
+                            new_clk_region[other_clk].bigger_fract.remove(clk)  # remove initiated clock from bigger list
+                        elif clk in new_clk_region[other_clk].equal_fract:  # if this clock listed as equal to other
+                            new_clk_region[other_clk].equal_fract.remove(clk)  # remove initiated clock from equal list
 
-                        if clk not in self[other_clk].smaller_fract:  # if clock is not in the smaller list of other
-                            self[other_clk].smaller_fract.append(clk)  # add it to list
-        return self
+                        if clk not in new_clk_region[other_clk].smaller_fract:  # if clock is not in the smaller list of other
+                            new_clk_region[other_clk].smaller_fract.append(clk)  # add it to list
+        return new_clk_region
 
 
 # ### Definition for Region Automaton (RA) of times transition table  $R(\mathscr{A})$:
@@ -233,11 +254,13 @@ class Clk_region(dict):
 
 class Extended_state:
     state = ""
+    id=None
 
     # dict of Clk_status
     clk_region = None
 
     def __init__(self, state, clk_region):
+        self.id=get_id()
         self.state = state
         self.clk_region = clk_region
 
@@ -274,6 +297,7 @@ class RA:
     graph = None
 
     def __init__(self, tba: TBA) -> None:
+        self.id=get_id()
         self.tba = tba
         self.alphabet = tba.alphabet
         self.clks = tba.clks
@@ -284,6 +308,16 @@ class RA:
         for time_reg in succ:
             if succ.count(time_reg) > 1:
                 succ.remove(time_reg)
+
+
+        #check this basterd:
+        # x:['<<', 0, 1], <[] , =[] , >['y'],y:['=', 0], <['x'] , =[] , >[],
+        test={  "x":Clk_status(['<<', 0, 1], [], [], ['y']) ,  
+                "y":Clk_status(['=', 0], ['x'] , [] , [])
+            }
+
+        succ = self.calculate_time_successor(test)
+        
         self.graph = self.BFS(self.ex_start[0])
         print("done")
 
@@ -464,7 +498,7 @@ class RA:
 
         return (next_ex_states, ex_edges)
 
-    def BFS(self, start):
+    def BFS(self, start:Extended_state):
 
         # Mark all the vertices as not visited
 
@@ -484,10 +518,13 @@ class RA:
 
             # Dequeue a vertex from queue and print it
             s = queue.pop(0)
-            print(s, end=" ")
+            print(s)
 
             # Get all adjacent vertices of the dequeued vertex s.
             adjacents, edges = self.next_states(s)
+            # print(s)
+
+            # need to inset edge only if her node is in.
             edge_list.extend(edges)
             # If a adjacent has not been visited, then mark it
             # visited and enqueue it
@@ -497,6 +534,8 @@ class RA:
                     queue.append(a)
                     visited.append(a)
                     if a not in self.ex_states:
+                        # id_counter=id_counter+1
+                        # a.id=id_counter
                         self.ex_states.append(a)
 
         return (visited, edge_list)
