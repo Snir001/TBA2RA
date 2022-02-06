@@ -311,15 +311,15 @@ class RA:
 
 
         #check this basterd:
-        # x:['<<', 0, 1], <[] , =[] , >['y'],y:['=', 0], <['x'] , =[] , >[],
-        test={  "x":Clk_status(['<<', 0, 1], [], [], ['y']) ,  
-                "y":Clk_status(['=', 0], ['x'] , [] , [])
-            }
+        # # x:['<<', 0, 1], <[] , =[] , >['y'],y:['=', 0], <['x'] , =[] , >[],
+        # test={  "x":Clk_status(['<<', 0, 1], [], [], ['y']) ,
+        #         "y":Clk_status(['=', 0], ['x'] , [] , [])
+        #     }
 
-        succ = self.calculate_time_successor(test)
+        # succ = self.calculate_time_successor(test)
 
         self.graph = self.BFS(self.ex_start[0])
-        print("done")
+        # print("done")
 
         # go through the edges of start, and build their neighbors ex_states.
         # while there are new states, go through them and go though their edges.
@@ -330,7 +330,6 @@ class RA:
         """
         calculate max number of condition of each clock
         """
-
         for edge in self.tba.edges:
             for condition in edge.conditions:
                 if condition == "":
@@ -356,6 +355,10 @@ class RA:
                     current_max = number
 
                 self.max_clock[clock_name] = current_max
+
+        for clk in self.clks:
+            if self.max_clock.get(clk) is None:
+                self.max_clock[clk] = 0
             # TODO?: after we ffill the numbers, we need to figure out what to do with the clock with no number.
 
     def calculate_start_states(self):
@@ -519,7 +522,7 @@ class RA:
 
             # Dequeue a vertex from queue and print it
             s = queue.pop(0)
-            print(s)
+            # print(s)
 
             # Get all adjacent vertices of the dequeued vertex s.
             adjacents, edges = self.next_states(s)
@@ -558,7 +561,7 @@ def ex_state_to_full_state(ex_state):
         if integral[0] == '=':
             data += clk + '_eq_' + str(integral[1])
         elif integral[0] == '>':
-            data += clk + '_less_' + str(integral[1])
+            data += clk + '_big_' + str(integral[1])
         elif integral[0] == '<<':
             data += clk + '_from_' + str(integral[1]) + "_to_" +str(integral[2])
 
@@ -573,6 +576,7 @@ def ex_edge_to_full_edge(ex_edge):
 
 
 def print_automata(ra):
+    dot = graphviz.Digraph('round-table', comment='The Round Table')
     ex_states = ra.graph[0]
     ex_edges = ra.graph[1]
     initial_state = ex_state_to_full_state(ra.ex_start[0])
@@ -587,60 +591,30 @@ def print_automata(ra):
         full_edges.append([start, target, char])
     ####generate NFA########
     nfa_str = "digraph{\n\tfake [style=invisible]\n"
-    nfa_str += 'node [margin=0 fontcolor=blue fontsize=32 width=0.5 shape=box style=filled]'
+    nfa_str += '\tnode [margin=0 fontcolor=blue fontsize=32 width=0.5 shape=box style=filled]'
     nfa_str += f"\t{initial_state[0]} [root=true label={initial_state[1]}]\n"
     nfa_str += f"\tfake -> {initial_state[0]} [style=bold]\n\n"
 
     for state in full_states:
-        nfa_str += f'\t{state[0]} [label={state[1]}]\n'
+        dot.node(state[0], state[1])
+        nfa_str += f'\t{state[0]} [shape=box label="{state[1]}"]\n'
     nfa_str += "\n"
 
     for edge in full_edges:
-        nfa_str += f"\t{edge[0]} -> {edge[1]} [label=\"{edge[2]}\"]\n"
+        dot.edge(edge[0], edge[1], constraint=edge[2])
+        nfa_str += f'\t{edge[0]} -> {edge[1]} [label="{edge[2]}"]\n'
     nfa_str += "}"
     print(nfa_str)
-    file = open('nfa.txt', 'w')
+    file = open('dot_file.dot.svg', 'w')
     file.write(nfa_str)
     file.close()
+    g = graphviz.Graph()
 
 
     #######################
 
-    nfa = automata_IO.nfa_dot_importer('nfa.txt')
-    automata_IO.nfa_to_dot(nfa, 'dot_file')
-
-
-
-def print_automata_old(ra):
-    ex_states = ra.graph[0]
-    ex_edges = ra.graph[1]
-    full_states = set()
-    full_edges = {}
-    for ex_state in ex_states:
-        full_state = ex_state_to_full_state(ex_state)
-        full_states.add(full_state)
-
-    for ex_edge in ex_edges:
-        key, char, value = ex_edge_to_full_edge(ex_edge)
-        if key in full_edges:
-            full_edges[key].update({char: value})
-        else:
-            full_edges[key] = {char: value}
-
-    input_symbols = set(ra.alphabet)
-    initial_state = ex_state_to_full_state(ra.ex_start[0])
-
-    dfa = VisualDFA(
-        states=full_states,
-        input_symbols=input_symbols,
-        transitions=full_edges,
-        initial_state=initial_state,
-        final_states=set()
-    )
-
-    dfa = VisualDFA(dfa)
-    dfa.show_diagram(view=True)
-    print("hi")
+    # nfa = automata_IO.nfa_dot_importer('nfa.txt')
+    # automata_IO.nfa_to_dot(nfa, 'dot_file')
 
 
 '''
@@ -650,6 +624,49 @@ and continuing lines end with /
 return list of strings
 -> list[str]
 '''
+
+
+def beautiful_region(region: Clk_region):
+    data = ""
+    for clk in region:
+        integral = region[clk].integral
+        if integral[0] == '=':
+            data += clk + ' = ' + str(integral[1])
+        elif integral[0] == '>':
+            data += clk + ' > ' + str(integral[1])
+        elif integral[0] == '<<':
+            data += str(integral[1]) + '>' + clk + '>' + str(integral[2])
+        data += ' | '
+    data = data[:-3]
+    return data
+
+
+def beautiful_state(ex_state: Extended_state):
+    state = ex_state.state
+    region = ex_state.clk_region
+    return f'({state} | {beautiful_region(region)})'
+
+
+def output_graph(ra):
+    ex_states = ra.graph[0]
+    ex_edges = ra.graph[1]
+    initial_state = ex_state_to_full_state(ra.ex_start[0])
+
+    graph = ''
+    for i, ex_state in enumerate(ex_states):
+        state = 'State ' + str(i+1) + '. --------------------------------------------------------\n'
+        state += beautiful_state(ex_state)
+        state += '\n\tEdges:'
+        for ex_edge in ex_edges:
+            if ex_state == ex_edge[0]:
+                state += f'\n\t\t    --->   {beautiful_state(ex_edge[1])} on {ex_edge[2]}'
+        # state += '\n-----------------------------------------------------------------\n'
+        state += '\n'
+        graph += state
+        print(state)
+    f = open('output.txt', 'w')
+    f.write(graph)
+    f.close()
 
 
 def read_file(file_path):
@@ -664,16 +681,25 @@ states = s0, s1, s2, s3
 start = s0
 clks = x, y
 edges=s0:s1:a:y:, s1:s2:b::y=1, s1:s3:c::x<1, s2:s3:c::x<1, s3:s3:d::x>1, s3:s1:a:y:y<1
-accepting=s3\
+accepting=\
 """
 
 automaton2 = """\
+alphabet = a, b
+states = s0, s1
+start = s0
+clks = x
+edges=s0:s1:a:x:, s1:s0:b::x<1
+accepting=\
+"""
+
+automaton3 = """\
 alphabet = a, b, c, d
 states = s0, s1, s2, s3
 start = s0
 clks = x, y
-edges=s0:s1:a:y:, s1:s2:b::y=1, s1:s3:c::x<1, s2:s3:c::x<1, s3:s3:d::x>1, s3:s1:a:y:y<1
-accepting=s3\
+edges=s0:s1:a:x:, s1:s2:b:y:, s2:s3:c::x<1, s3:s0:d::x<1
+accepting=\
 """
 
 
@@ -715,13 +741,13 @@ def read_TBA_from_text(text: str) -> TBA:
             exit(-1)
 
     tba = TBA(alphabet, states, start, clks, edges, accepting)
-    print(tba)
+    # print(tba)
     return tba
 
 
 # read TBA from file and print it:
 tba = read_TBA_from_text(automaton1)
 ra = RA(tba)
-print_automata(ra)
-print("hi")
+output_graph(ra)
+# print_automata(ra)
 # print(ra)
