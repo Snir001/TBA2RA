@@ -14,6 +14,11 @@
 # the set $\lambda \subseteq C$ are the clock to be reset with this transition, and $\lambda$ is a clock constraint over $C$ 
 # 
 # Example: $<s_0, s_1, a, (x,y) , (x<10,z>2) >$ - transition from $s_0$ to $s_1$ on char $a$ if clock x under 10 and clock z above 2, and clock x and y are reset on this transition
+import PySimpleAutomata
+from PySimpleAutomata import automata_IO, NFA
+import visual_automata
+from visual_automata.fa.dfa import VisualDFA
+import graphviz
 
 
 class Edge:
@@ -407,8 +412,8 @@ class RA:
                     if have_maximal_fract:
                         # if clk_status is c-1<x<c, make it x=c
                         new_clock_region[clk_name] = Clk_status(['=', clk_status.integral[2]],
-                                                                clk_status.bigger_fract + clk_status.smaller_fract,
-                                                                clk_status.equal_fract, [])
+                                                                clk_status.bigger_fract, clk_status.smaller_fract,
+                                                                clk_status.equal_fract)
                         continue
 
                 # if we are here, than integral is not '<', or have_maximal_fract is false
@@ -503,6 +508,101 @@ class RA:
         pass
 
 
+def ex_state_to_full_state(ex_state):
+    state = ex_state.state
+    region = ex_state.clk_region
+    # return ex_state.state + "\n" + str(ex_state.clk_region)
+    data = ""
+    for clk in region:
+        integral = region[clk].integral
+        if integral[0] == '=':
+            data += clk + '_eq_' + str(integral[1])
+        elif integral[0] == '>':
+            data += clk + '_less_' + str(integral[1])
+        elif integral[0] == '<<':
+            data += clk + '_from_' + str(integral[1]) + "_to_" +str(integral[2])
+
+    return f'{state}_{data}', f'{state}_{data}'
+
+
+def ex_edge_to_full_edge(ex_edge):
+    start = ex_state_to_full_state(ex_edge[0])[0]
+    char = ex_edge[2]
+    target = ex_state_to_full_state(ex_edge[1])[0]
+    return start, char, target
+
+
+def print_automata(ra):
+    ex_states = ra.graph[0]
+    ex_edges = ra.graph[1]
+    initial_state = ex_state_to_full_state(ra.ex_start[0])
+    full_states = []
+    for ex_state in ex_states:
+        full_state = ex_state_to_full_state(ex_state)
+        full_states.append(full_state)
+
+    full_edges = []
+    for ex_edge in ex_edges:
+        start, char, target = ex_edge_to_full_edge(ex_edge)
+        full_edges.append([start, target, char])
+    ####generate NFA########
+    nfa_str = "digraph{\n\tfake [style=invisible]\n"
+    nfa_str += 'node [margin=0 fontcolor=blue fontsize=32 width=0.5 shape=box style=filled]'
+    nfa_str += f"\t{initial_state[0]} [root=true label={initial_state[1]}]\n"
+    nfa_str += f"\tfake -> {initial_state[0]} [style=bold]\n\n"
+
+    for state in full_states:
+        nfa_str += f'\t{state[0]} [label={state[1]}]\n'
+    nfa_str += "\n"
+
+    for edge in full_edges:
+        nfa_str += f"\t{edge[0]} -> {edge[1]} [label=\"{edge[2]}\"]\n"
+    nfa_str += "}"
+    print(nfa_str)
+    file = open('nfa.txt', 'w')
+    file.write(nfa_str)
+    file.close()
+
+
+    #######################
+
+    nfa = automata_IO.nfa_dot_importer('nfa.txt')
+    automata_IO.nfa_to_dot(nfa, 'dot_file')
+
+
+
+def print_automata_old(ra):
+    ex_states = ra.graph[0]
+    ex_edges = ra.graph[1]
+    full_states = set()
+    full_edges = {}
+    for ex_state in ex_states:
+        full_state = ex_state_to_full_state(ex_state)
+        full_states.add(full_state)
+
+    for ex_edge in ex_edges:
+        key, char, value = ex_edge_to_full_edge(ex_edge)
+        if key in full_edges:
+            full_edges[key].update({char: value})
+        else:
+            full_edges[key] = {char: value}
+
+    input_symbols = set(ra.alphabet)
+    initial_state = ex_state_to_full_state(ra.ex_start[0])
+
+    dfa = VisualDFA(
+        states=full_states,
+        input_symbols=input_symbols,
+        transitions=full_edges,
+        initial_state=initial_state,
+        final_states=set()
+    )
+
+    dfa = VisualDFA(dfa)
+    dfa.show_diagram(view=True)
+    print("hi")
+
+
 '''
 read file and return list of lines,
 while ignoring lines begin with #
@@ -519,6 +619,15 @@ def read_file(file_path):
 
 
 automaton1 = """\
+alphabet = a, b, c, d
+states = s0, s1, s2, s3
+start = s0
+clks = x, y
+edges=s0:s1:a:y:, s1:s2:b::y=1, s1:s3:c::x<1, s2:s3:c::x<1, s3:s3:d::x>1, s3:s1:a:y:y<1
+accepting=s3\
+"""
+
+automaton2 = """\
 alphabet = a, b, c, d
 states = s0, s1, s2, s3
 start = s0
@@ -573,5 +682,6 @@ def read_TBA_from_text(text: str) -> TBA:
 # read TBA from file and print it:
 tba = read_TBA_from_text(automaton1)
 ra = RA(tba)
+print_automata(ra)
 print("hi")
 # print(ra)
