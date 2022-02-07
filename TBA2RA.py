@@ -1,32 +1,34 @@
 # # Times Buchi Automaton To Region Automaton
 
 
-# ### Definitions for timed transition table (TTA) $\mathscr{A}$: 
-# 
+# ### Definitions for timed transition table (TTA) $\mathscr{A}$:
+#
 # * $\Sigma$ -  alphabet
 # * $S$ - set of states
 # * $S_0 \subseteq S$ - set of start states
 # * $C$ - set of clock
 # * $E \subseteq S \times S \times \Sigma \times 2^C \times \Phi (C)$ - set of transitions.
-# 
+#
 # An edge $<s,s',a,\lambda,\delta> $ represents a transition from state $s$ to state $s'$ on input symbol $a$.
-# 
-# the set $\lambda \subseteq C$ are the clock to be reset with this transition, and $\lambda$ is a clock constraint over $C$ 
-# 
+#
+# the set $\lambda \subseteq C$ are the clock to be reset with this transition, and $\lambda$ is a clock constraint over $C$
+#
 # Example: $<s_0, s_1, a, (x,y) , (x<10,z>2) >$ - transition from $s_0$ to $s_1$ on char $a$ if clock x under 10 and clock z above 2, and clock x and y are reset on this transition
 
 
+# create deepcopy of objects
 from copy import copy, deepcopy
-import PySimpleAutomata
-from PySimpleAutomata import automata_IO, NFA
-import visual_automata
-from visual_automata.fa.dfa import VisualDFA
-import graphviz
 
-g_id=-1
+# regular expression to easily seperate condition arguments
+import re
+
+
+g_id = -1
+
+
 def get_id():
     global g_id
-    g_id=g_id+1 
+    g_id = g_id+1
     return g_id
 
 
@@ -38,15 +40,12 @@ class Edge:
     conditions = []
 
     def __init__(self, source, target, input, clk_init, conditions):
-        self.id=get_id()
+        self.id = get_id()
         self.source = source
         self.target = target
         self.input = input
         self.clk_init = clk_init
         self.conditions = conditions
-        # set values to vars
-        # think how to save 'condition' so we can later evaluate them
-        pass
 
     def __str__(self):
         string = "\t\tSource = %s\n" % self.source
@@ -69,12 +68,8 @@ class TBA:
     edges = []  # use edge class
     accepting = []
 
-    '''
-    those arguments.
-    '''
-
     def __init__(self, alphabet, states, start, clks, edges, accepting):
-        self.id=get_id()
+        self.id = get_id()
         self.alphabet = alphabet
         self.states = states
         self.start = start
@@ -89,11 +84,6 @@ class TBA:
             edge = Edge(source, target, input, clks_init, conditions)
             self.edges.append(edge)
         self.accepting = accepting
-        pass
-
-    '''
-    print function
-    '''
 
     def __str__(self):
         string = "Alphabet = %s\n" % self.alphabet
@@ -121,7 +111,7 @@ class Clk_status:
     smaller_fract = []
 
     def __init__(self, integral, bigger_fract, equal_fract, smaller_fract):
-        self.id=get_id()
+        self.id = get_id()
         self.integral = integral
         self.bigger_fract = bigger_fract
         self.equal_fract = equal_fract
@@ -144,31 +134,26 @@ class Clk_status:
         return string
 
 
-'''
-contains list o clocks statuses
-    its better to use a dict to represent this by dict:
+class Clk_region(dict):
+    '''
+    contains list o clocks statuses
+    its better to use a dict to represent this:
     {
         <clk_name1> : <clk_status1>
         <clk_name2> : <clk_status2>
         ....
         "x" : <clk_status>
     }
-'''
+    '''
 
-
-class Clk_region(dict):
-    # def __str__(self):
-    #     return str(self)
-
-    def __init__(self, *args, **kwargs ):
-        self.id=get_id()
-        dict.__init__(self, *args, **kwargs )
-
+    def __init__(self, *args, **kwargs):
+        self.id = get_id()
+        dict.__init__(self, *args, **kwargs)
 
     def __str__(self):
-        string=""
+        string = ""
         for clk, value in self.items():
-            string= string+str(clk)+":"+str(value)+","
+            string = string+str(clk)+":"+str(value)+","
         return string
 
     def satisfy(self, conditions: list):
@@ -181,7 +166,8 @@ class Clk_region(dict):
             if single_condition == '':
                 continue
             else:
-                clock_name, clock_cond_val = re.split("[<>=]{1,2}", single_condition)
+                clock_name, clock_cond_val = re.split(
+                    "[<>=]{1,2}", single_condition)
                 clock_integral = self.get(clock_name).integral
                 if clock_integral[0] == '=':
                     z = clock_integral[1]
@@ -196,7 +182,7 @@ class Clk_region(dict):
 
                 sign = re.search("[<>=]{1,2}", single_condition).group(0)
                 if sign == "=":
-                    sign= "=="
+                    sign = "=="
 
                 eval_exp = str(z) + sign + clock_cond_val
                 if not eval(eval_exp):
@@ -211,8 +197,7 @@ class Clk_region(dict):
         2) change bigger, equal, smaller fract to be right
         """
         # make copy of self:
-        new_clk_region= deepcopy(self)
-
+        new_clk_region = deepcopy(self)
 
         for clk in new_clk_region:
             if clk in clks:
@@ -227,15 +212,21 @@ class Clk_region(dict):
                     elif other_clk in clks:  # if the other clock also initiated
                         new_clk_region[clk].equal_fract.append(other_clk)
                     else:  # if the other clock was not initiated
-                        new_clk_region[clk].bigger_fract.append(other_clk)  # other clock is bigger than this clock
-                        # TODO: check about clock that was initiated in the past
-                        if clk in new_clk_region[other_clk].bigger_fract:  # if this clock listed as bigger than other
-                            new_clk_region[other_clk].bigger_fract.remove(clk)  # remove initiated clock from bigger list
-                        elif clk in new_clk_region[other_clk].equal_fract:  # if this clock listed as equal to other
-                            new_clk_region[other_clk].equal_fract.remove(clk)  # remove initiated clock from equal list
+                        # other clock is bigger than this clock
+                        new_clk_region[clk].bigger_fract.append(other_clk)
+                        # if this clock listed as bigger than other
+                        if clk in new_clk_region[other_clk].bigger_fract:
+                            new_clk_region[other_clk].bigger_fract.remove(
+                                clk)  # remove initiated clock from bigger list
+                        # if this clock listed as equal to other
+                        elif clk in new_clk_region[other_clk].equal_fract:
+                            new_clk_region[other_clk].equal_fract.remove(
+                                clk)  # remove initiated clock from equal list
 
-                        if clk not in new_clk_region[other_clk].smaller_fract:  # if clock is not in the smaller list of other
-                            new_clk_region[other_clk].smaller_fract.append(clk)  # add it to list
+                        # if clock is not in the smaller list of other
+                        if clk not in new_clk_region[other_clk].smaller_fract:
+                            new_clk_region[other_clk].smaller_fract.append(
+                                clk)  # add it to list
         return new_clk_region
 
 
@@ -246,21 +237,17 @@ class Clk_region(dict):
 #     * $\alpha''$ is a time-successor of $\alpha$
 #     * $\alpha''$ satisfies $\delta$
 #     * $\alpha=[\lambda \mapsto 0] \alpha''$ (i dont know what it means...)
-# 
-# 
-# 
-# 
 
 
 class Extended_state:
     state = ""
-    id=None
+    id = None
 
     # dict of Clk_status
     clk_region = None
 
     def __init__(self, state, clk_region):
-        self.id=get_id()
+        self.id = get_id()
         self.state = state
         self.clk_region = clk_region
 
@@ -274,14 +261,10 @@ class Extended_state:
         return f"{self.state}: {self.clk_region}"
 
 
-# regular expression to easily seperate condition arguments
-
-import re
-
-
-# print pages 19 to 25
-
 class RA:
+    """
+    Region automaton
+    """
     # contain the max number that a clock is compared to
     # structure:
     # <clock_name>: <max value:int>
@@ -297,34 +280,20 @@ class RA:
     graph = None
 
     def __init__(self, tba: TBA) -> None:
-        self.id=get_id()
+        self.id = get_id()
         self.tba = tba
         self.alphabet = tba.alphabet
         self.clks = tba.clks
 
         self.calculate_clks_max_value()
         self.calculate_start_states()
-        succ = self.calculate_time_successor(self.ex_start[0].clk_region)
-        for time_reg in succ:
-            if succ.count(time_reg) > 1:
-                succ.remove(time_reg)
+        # succ = self.calculate_time_successor(self.ex_start[0].clk_region)
+        # for time_reg in succ:
+        #     if succ.count(time_reg) > 1:
+        #         succ.remove(time_reg)
 
-
-        #check this basterd:
-        # # x:['<<', 0, 1], <[] , =[] , >['y'],y:['=', 0], <['x'] , =[] , >[],
-        # test={  "x":Clk_status(['<<', 0, 1], [], [], ['y']) ,
-        #         "y":Clk_status(['=', 0], ['x'] , [] , [])
-        #     }
-
-        # succ = self.calculate_time_successor(test)
-
-        self.graph = self.BFS(self.ex_start[0])
-        # print("done")
-
-        # go through the edges of start, and build their neighbors ex_states.
-        # while there are new states, go through them and go though their edges.
-
-        pass
+        self.graph = self.BFS(self.ex_start)
+        self.ex_states, self.edges = self.BFS(self.ex_start)
 
     def calculate_clks_max_value(self):
         """
@@ -359,13 +328,11 @@ class RA:
         for clk in self.clks:
             if self.max_clock.get(clk) is None:
                 self.max_clock[clk] = 0
-            # TODO?: after we ffill the numbers, we need to figure out what to do with the clock with no number.
 
     def calculate_start_states(self):
         """
         calculate_start_states - create the start clock region (all clock zero and start state < s0,[v0] >)
         """
-        # TODO: fill fract parts
         start_states = self.tba.start
         start_clk_regions = []
         # start_clk_regions = {}
@@ -393,7 +360,7 @@ class RA:
         all_bigger_than_max = True
         for clk_name, clk_status in clk_region.items():
             # for clk_status in clk_region.clk_status_list:
-            if clk_status.integral[0] != '>':  #cc
+            if clk_status.integral[0] != '>':  # cc
                 all_bigger_than_max = False
                 break
 
@@ -414,7 +381,7 @@ class RA:
                 if clk_status.integral[0] == '=':
                     # if equal to max value of clock
                     if max_clocks_values[clk_name] == clk_status.integral[1]:
-                        new_clock_region[clk_name] = Clk_status([">", clk_status.integral[1]],  #cc
+                        new_clock_region[clk_name] = Clk_status([">", clk_status.integral[1]],  # cc
                                                                 clk_status.bigger_fract, clk_status.equal_fract,
                                                                 clk_status.smaller_fract)
                     if max_clocks_values[clk_name] > clk_status.integral[1]:
@@ -426,7 +393,8 @@ class RA:
                 if clk_status.integral[0] != '=':
                     new_clock_region[clk_name] = clk_status
 
-            return_regions = [new_clock_region] + self.calculate_time_successor(new_clock_region)
+            return_regions = [new_clock_region] + \
+                self.calculate_time_successor(new_clock_region)
             for time_reg in return_regions:
                 if return_regions.count(time_reg) > 1:
                     return_regions.remove(time_reg)
@@ -435,33 +403,32 @@ class RA:
         # case no one equal and not all above max
         # in this case' the time succesor incuding the clk_region itself, his time succesor, and his time succesor
         else:
-            maximal_fract_clocks=[]
+            maximal_fract_clocks = []
             for clk_name, clk_status in clk_region.items():
-                if clk_status.integral[0] != '>':  #cc
+                if clk_status.integral[0] != '>':  # cc
                     # not bigger than max value
                     # check if has maximal fractional part between all the clock
                     # that smaller than thier max value. so we make sure all the clocks in the bogger_fract are above their max value:
                     have_maximal_fract = True
                     for bigger_fract_clk in clk_status.bigger_fract:
                         # check that all the clocks with bigger fract are bigger than their max value
-                        if clk_region[bigger_fract_clk].integral[0] != '>':  #cc
+                        if clk_region[bigger_fract_clk].integral[0] != '>':  # cc
                             have_maximal_fract = False
                             break
                     if have_maximal_fract:
                         maximal_fract_clocks.append(clk_name)
 
             # here we need to adjust the fract part!!
-            # for each clock with maximal fract, make it equal to nnext integer and 
+            # for each clock with maximal fract, make it equal to nnext integer and
             # and change his fract to be smallest, and other fratcs smaller to incllude him:
-            new_clock_region= clk_region.init_clocks(maximal_fract_clocks)
+            new_clock_region = clk_region.init_clocks(maximal_fract_clocks)
             for clk_name in maximal_fract_clocks:
-                new_clock_region[clk_name].integral=['=',clk_region[clk_name].integral[2]]
+                new_clock_region[clk_name].integral = [
+                    '=', clk_region[clk_name].integral[2]]
 
             # in this case' the time succesor incuding the clk_region itself, his time succesor, and his time succesor
-
-
-
-            return_regions= [clk_region, new_clock_region] + self.calculate_time_successor(new_clock_region)
+            return_regions = [clk_region, new_clock_region] + \
+                self.calculate_time_successor(new_clock_region)
             for time_reg in return_regions:
                 if return_regions.count(time_reg) > 1:
                     return_regions.remove(time_reg)
@@ -473,7 +440,7 @@ class RA:
     '''
 
     def next_states(self, start_ex_state: Extended_state):
-        # R(A) has an edge <<s,c>, <s',c'>, a> iff there is an edge 
+        # R(A) has an edge <<s,c>, <s',c'>, a> iff there is an edge
         # <s,s',a,lambda,delta> in tba.E and a region c'' such that:
         #   1) c'' is a time successor of c
         #   2) c'' satisfies delta
@@ -486,7 +453,8 @@ class RA:
         s0_edges = [e for e in self.tba.edges if e.source == s0]
 
         # get time successors of start_ex_state
-        time_suc_list = self.calculate_time_successor(start_ex_state.clk_region)
+        time_suc_list = self.calculate_time_successor(
+            start_ex_state.clk_region)
 
         for e in s0_edges:
             # check time_suc satisfies condition:
@@ -494,7 +462,8 @@ class RA:
                 if time_suc.satisfy(e.conditions):
                     # edit time_suc to fit lambda (zero the clocks need to be zeroed)
 
-                    ex_state = Extended_state(e.target, time_suc.init_clocks(e.clk_init))
+                    ex_state = Extended_state(
+                        e.target, time_suc.init_clocks(e.clk_init))
                     # ex_state = time_suc.init_clocks(e.clk_init)
                     next_ex_states.append(ex_state)
 
@@ -502,8 +471,10 @@ class RA:
 
         return (next_ex_states, ex_edges)
 
-    def BFS(self, start:Extended_state):
-
+    def BFS(self, starts: list):
+        """
+        gets list of extended states
+        """
         # Mark all the vertices as not visited
 
         # visited = [False] * (max(self.graph) + 1)
@@ -514,9 +485,8 @@ class RA:
         edge_list = []
 
         # Mark the source node as visited and enqueue it
-        queue.append(start)
-        visited.append(start)
-        self.ex_states.append(start)
+        queue.extend(starts)
+        visited.extend(starts)
 
         while queue:
 
@@ -526,10 +496,10 @@ class RA:
 
             # Get all adjacent vertices of the dequeued vertex s.
             adjacents, edges = self.next_states(s)
-            # print(s)
 
-            # need to inset edge only if her node is in.
+            # add edges to edge list.
             edge_list.extend(edges)
+
             # If a adjacent has not been visited, then mark it
             # visited and enqueue it
             for a in adjacents:
@@ -537,18 +507,8 @@ class RA:
                 if a not in visited:
                     queue.append(a)
                     visited.append(a)
-                    if a not in self.ex_states:
-                        # id_counter=id_counter+1
-                        # a.id=id_counter
-                        self.ex_states.append(a)
 
         return (visited, edge_list)
-
-    def build_all(self):
-        pass
-
-    def __str__(self):
-        pass
 
 
 def ex_state_to_full_state(ex_state):
@@ -563,67 +523,10 @@ def ex_state_to_full_state(ex_state):
         elif integral[0] == '>':
             data += clk + '_big_' + str(integral[1])
         elif integral[0] == '<<':
-            data += clk + '_from_' + str(integral[1]) + "_to_" +str(integral[2])
+            data += clk + '_from_' + \
+                str(integral[1]) + "_to_" + str(integral[2])
 
     return f'{state}_{data}', f'{state}_{data}'
-
-
-def ex_edge_to_full_edge(ex_edge):
-    start = ex_state_to_full_state(ex_edge[0])[0]
-    char = ex_edge[2]
-    target = ex_state_to_full_state(ex_edge[1])[0]
-    return start, char, target
-
-
-def print_automata(ra):
-    dot = graphviz.Digraph('round-table', comment='The Round Table')
-    ex_states = ra.graph[0]
-    ex_edges = ra.graph[1]
-    initial_state = ex_state_to_full_state(ra.ex_start[0])
-    full_states = []
-    for ex_state in ex_states:
-        full_state = ex_state_to_full_state(ex_state)
-        full_states.append(full_state)
-
-    full_edges = []
-    for ex_edge in ex_edges:
-        start, char, target = ex_edge_to_full_edge(ex_edge)
-        full_edges.append([start, target, char])
-    ####generate NFA########
-    nfa_str = "digraph{\n\tfake [style=invisible]\n"
-    nfa_str += '\tnode [margin=0 fontcolor=blue fontsize=32 width=0.5 shape=box style=filled]'
-    nfa_str += f"\t{initial_state[0]} [root=true label={initial_state[1]}]\n"
-    nfa_str += f"\tfake -> {initial_state[0]} [style=bold]\n\n"
-
-    for state in full_states:
-        dot.node(state[0], state[1])
-        nfa_str += f'\t{state[0]} [shape=box label="{state[1]}"]\n'
-    nfa_str += "\n"
-
-    for edge in full_edges:
-        dot.edge(edge[0], edge[1], constraint=edge[2])
-        nfa_str += f'\t{edge[0]} -> {edge[1]} [label="{edge[2]}"]\n'
-    nfa_str += "}"
-    print(nfa_str)
-    file = open('dot_file.dot.svg', 'w')
-    file.write(nfa_str)
-    file.close()
-    g = graphviz.Graph()
-
-
-    #######################
-
-    # nfa = automata_IO.nfa_dot_importer('nfa.txt')
-    # automata_IO.nfa_to_dot(nfa, 'dot_file')
-
-
-'''
-read file and return list of lines,
-while ignoring lines begin with #
-and continuing lines end with /
-return list of strings
--> list[str]
-'''
 
 
 def beautiful_region(region: Clk_region):
@@ -654,7 +557,8 @@ def output_graph(ra):
 
     graph = ''
     for i, ex_state in enumerate(ex_states):
-        state = 'State ' + str(i+1) + '. --------------------------------------------------------\n'
+        state = 'State ' + \
+            str(i+1) + '. --------------------------------------------------------\n'
         state += beautiful_state(ex_state)
         state += '\n\tEdges:'
         for ex_edge in ex_edges:
@@ -670,37 +574,16 @@ def output_graph(ra):
 
 
 def read_file(file_path):
+    '''
+    read file and return list of lines,
+    while ignoring lines begin with #
+    and continuing lines end with /
+    return list of strings
+    -> list[str]
+    '''
     file = open(file_path)
     lines = file.readlines()
     return lines
-
-
-automaton1 = """\
-alphabet = a, b, c, d
-states = s0, s1, s2, s3
-start = s0
-clks = x, y
-edges=s0:s1:a:y:, s1:s2:b::y=1, s1:s3:c::x<1, s2:s3:c::x<1, s3:s3:d::x>1, s3:s1:a:y:y<1
-accepting=\
-"""
-
-automaton2 = """\
-alphabet = a, b
-states = s0, s1
-start = s0
-clks = x
-edges=s0:s1:a:x:, s1:s0:b::x<1
-accepting=\
-"""
-
-automaton3 = """\
-alphabet = a, b, c, d
-states = s0, s1, s2, s3
-start = s0
-clks = x, y
-edges=s0:s1:a:x:, s1:s2:b:y:, s2:s3:c::x<1, s3:s0:d::x<1
-accepting=\
-"""
 
 
 def read_TBA_from_text(text: str) -> TBA:
@@ -745,9 +628,41 @@ def read_TBA_from_text(text: str) -> TBA:
     return tba
 
 
+automaton1 = """\
+alphabet = a, b, c, d
+states = s0, s1, s2, s3
+start = s0
+clks = x, y
+edges=s0:s1:a:y:, s1:s2:b::y=1, s1:s3:c::x<1, s2:s3:c::x<1, s3:s3:d::x>1, s3:s1:a:y:y<1
+accepting=\
+"""
+
+automaton2 = """\
+alphabet = a, b
+states = s0, s1
+start = s0
+clks = x
+edges=s0:s1:a:x:, s1:s0:b::x<1
+accepting=\
+"""
+
+automaton3 = """\
+alphabet = a, b, c, d
+states = s0, s1, s2, s3
+start = s0
+clks = x, y
+edges=s0:s1:a:x:, s1:s2:b:y:, s2:s3:c::x<1, s3:s0:d::x<1
+accepting=\
+"""
+
+
 # read TBA from file and print it:
+# Change check_automaton to one of the following :
+#   automaton1
+#   automaton2
+#   automaton3
+check_automaton = automaton1
+
 tba = read_TBA_from_text(automaton1)
 ra = RA(tba)
 output_graph(ra)
-# print_automata(ra)
-# print(ra)
